@@ -1,4 +1,5 @@
 variable "name_prefix" { type = string }
+
 variable "tags" {
   type    = map(string)
   default = {}
@@ -6,7 +7,9 @@ variable "tags" {
 
 # Network
 variable "vpc_id" { type = string }
+
 variable "public_subnet_id" { type = string }
+
 variable "private_subnet_ids" { type = list(string) }
 variable "allowed_cidrs" {
   type    = list(string)

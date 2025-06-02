@@ -1,0 +1,7 @@
+formatter: markdown table
+output:
+  file: README.md
+  mode: inject           # put docs between the BEGIN / END delimiters
+sections:
+  hide:
+    - header             # keep the README title you already wrote
