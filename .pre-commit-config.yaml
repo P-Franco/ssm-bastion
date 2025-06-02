@@ -1,0 +1,8 @@
+repos:
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.81.0        # or the latest tag
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+      - id: terraform_tflint          # style / policy lint
+      - id: terraform_docs            # ← leave args EMPTY

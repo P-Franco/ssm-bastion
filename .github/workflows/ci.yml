@@ -1,0 +1,35 @@
+name: terraform-ci
+
+on:
+  pull_request:
+  push: { branches: [main] }
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - uses: terraform-linters/setup-tflint@v4
+      - name: tflint
+        run: tflint --recursive
+
+      - uses: aquasecurity/tfsec-action@v1.0.3      # optional security scan
+        with:
+          soft_fail: true                       # warn but don’t fail build
+
+      - name: Regenerate docs
+        uses: terraform-docs/gh-actions@v1.1.0
+        with:
+          working-dir: .
+          output-file: README.md
+          output-method: inject
+          git-push: "true"          # commits “docs: terraform-docs update”
