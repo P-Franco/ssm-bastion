@@ -1,20 +1,36 @@
-variable "name_prefix" { type = string }
+variable "name_prefix" {
+  type    = string
+  default = "bastion"
+}
 
 variable "tags" {
   type    = map(string)
   default = {}
 }
 
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
 # Network
-variable "vpc_id" { type = string }
+variable "vpc_id" {
+  type = string
+}
 
-variable "public_subnet_id" { type = string }
+variable "public_subnet_id" {
+  type = string
+}
 
-variable "private_subnet_ids" { type = list(string) }
+variable "private_subnet_ids" {
+  type = list(string)
+}
+
 variable "allowed_cidrs" {
   type    = list(string)
   default = []
 }
+
 variable "allowed_ssh_cidrs" {
   type    = list(string)
   default = []
@@ -45,19 +61,25 @@ variable "create_vpc_endpoints" {
 }
 
 # Bastion specifics
-variable "ami_id" { type = string }
+variable "ami_id" {
+  type = string
+}
+
 variable "instance_type" {
   type    = string
   default = "t3.micro"
 }
+
 variable "enable_public_ip" {
   type    = bool
   default = false
 }
+
 variable "enable_ssh_fallback" {
   type    = bool
   default = false
 }
+
 variable "attach_admin_policy" {
   type    = bool
   default = true
