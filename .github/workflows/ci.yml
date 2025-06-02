@@ -5,6 +5,27 @@ on:
   push: { branches: [main] }
 
 jobs:
+  lint-fmt-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+      - name: Terraform init
+        run: terraform init
+      - name: Terraform validate
+        run: terraform validate
+      - uses: terraform-linters/setup-tflint@v4
+      - name: Run tflint
+        run: tflint --recursive
+      - uses: terraform-docs/gh-actions@v1.1.0
+        with:
+          working-dir: .
+          output-file: README.md
+          output-method: inject
+          git-push: "true"
+
   lint:
     runs-on: ubuntu-latest
     steps:
