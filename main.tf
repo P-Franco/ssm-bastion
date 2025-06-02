@@ -35,7 +35,7 @@ locals {
 
 resource "aws_cloudwatch_log_group" "ssm" {
   count             = var.enable_cloudwatch_logs ? 1 : 0
-  name              = "/ssm/${var.name_prefix}"
+  name              = "/ssm/${var.name_prefix}-${var.environment}"
   retention_in_days = var.log_retention_days
   kms_key_id        = local.kms_arn
   tags              = var.tags
@@ -43,13 +43,13 @@ resource "aws_cloudwatch_log_group" "ssm" {
 
 resource "aws_s3_bucket" "ssm_logs" {
   count         = var.enable_s3_logs ? 1 : 0
-  bucket        = "${var.name_prefix}-ssm-logs"
+  bucket        = "${var.name_prefix}-ssm-logs-${var.environment}"
   force_destroy = true
   tags          = var.tags
 }
 
 resource "aws_ssm_document" "preferences" {
-  name          = "${var.name_prefix}-SSMPreferences"
+  name          = "${var.name_prefix}-SSMPreferences-${var.environment}"
   document_type = "Session"
   content = jsonencode({
     schemaVersion = "1.0"
@@ -68,7 +68,7 @@ resource "aws_ssm_document" "preferences" {
 # ---------- VPC ENDPOINTS ----------
 resource "aws_security_group" "endpoints" {
   count  = var.create_vpc_endpoints ? 1 : 0
-  name   = "${var.name_prefix}-ssm-endpoints"
+  name   = "${var.name_prefix}-ssm-endpoints-sg-${var.environment}"
   vpc_id = var.vpc_id
   egress {
     from_port   = 0
@@ -109,7 +109,7 @@ resource "aws_vpc_endpoint" "ssm" {
 
 # ---------- BASTION SG ----------
 resource "aws_security_group" "bastion" {
-  name   = "${var.name_prefix}-bastion-sg"
+  name   = "${var.name_prefix}-bastion-sg-${var.environment}"
   vpc_id = var.vpc_id
   egress {
     from_port   = 0
@@ -132,7 +132,7 @@ resource "aws_security_group" "bastion" {
 
 # ---------- IAM ----------
 resource "aws_iam_role" "bastion" {
-  name = "${var.name_prefix}-bastion-role"
+  name = "${var.name_prefix}-bastion-role-${var.environment}"
   assume_role_policy = jsonencode({
     Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Principal = { Service = "ec2.amazonaws.com" }, Action = "sts:AssumeRole" }]
@@ -152,7 +152,7 @@ resource "aws_iam_role_policy_attachment" "admin" {
 }
 
 resource "aws_iam_instance_profile" "bastion" {
-  name = "${var.name_prefix}-bastion-profile"
+  name = "${var.name_prefix}-bastion-profile-${var.environment}"
   role = aws_iam_role.bastion.name
 }
 
