@@ -1,7 +1,9 @@
-# ssm-bastion 🌐🔐
+# ssm-bastion 🌐
 
-![CI](https://github.com/P-Franco/ssm-bastion/actions/workflows/ci.yml/badge.svg)
-![License](https://img.shields.io/github/license/P-Franco/ssm-bastion)
+[![CI](https://github.com/P-Franco/ssm-bastion/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/P-Franco/ssm-bastion/actions/workflows/ci.yml)
+
+[![License: MIT](https://img.shields.io/github/license/P-Franco/ssm-bastion?cacheSeconds=3600)](LICENSE)
+
 
 A reusable Terraform module that spins up an **EC2 bastion host reachable exclusively through AWS Systems Manager Session Manager**.  
 It takes care of:
