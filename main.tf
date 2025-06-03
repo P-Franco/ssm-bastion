@@ -1,12 +1,17 @@
+#################################
 # ---------- DATA SOURCES ----------
+#################################
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+#################################
 # ---------- LOGGING ----------
+#################################
 resource "aws_kms_key" "ssm" {
   count               = (var.enable_cloudwatch_logs || var.enable_s3_logs) && var.create_kms_key ? 1 : 0
   description         = "KMS key for SSM session logging"
   enable_key_rotation = true
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -51,6 +56,7 @@ resource "aws_s3_bucket" "ssm_logs" {
 resource "aws_ssm_document" "preferences" {
   name          = "${var.name_prefix}-SSMPreferences-${var.environment}"
   document_type = "Session"
+
   content = jsonencode({
     schemaVersion = "1.0"
     description   = "Session Manager preferences managed by Terraform"
@@ -65,17 +71,29 @@ resource "aws_ssm_document" "preferences" {
   })
 }
 
+#################################
 # ---------- VPC ENDPOINTS ----------
+#################################
+locals {
+  endpoint_services = [
+    "com.amazonaws.${data.aws_region.current.name}.ssm",
+    "com.amazonaws.${data.aws_region.current.name}.ssmmessages",
+    "com.amazonaws.${data.aws_region.current.name}.ec2messages"
+  ]
+}
+
 resource "aws_security_group" "endpoints" {
   count  = var.create_vpc_endpoints ? 1 : 0
   name   = "${var.name_prefix}-ssm-endpoints-sg-${var.environment}"
   vpc_id = var.vpc_id
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   dynamic "ingress" {
     for_each = var.allowed_cidrs
     content {
@@ -85,15 +103,8 @@ resource "aws_security_group" "endpoints" {
       cidr_blocks = [ingress.value]
     }
   }
-  tags = var.tags
-}
 
-locals {
-  endpoint_services = [
-    "com.amazonaws.${data.aws_region.current.name}.ssm",
-    "com.amazonaws.${data.aws_region.current.name}.ssmmessages",
-    "com.amazonaws.${data.aws_region.current.name}.ec2messages"
-  ]
+  tags = var.tags
 }
 
 resource "aws_vpc_endpoint" "ssm" {
@@ -107,35 +118,73 @@ resource "aws_vpc_endpoint" "ssm" {
   tags                = merge(var.tags, { Name = "${var.name_prefix}-endpoint-${count.index}" })
 }
 
+# ingress from bastion → endpoint ENIs
+resource "aws_security_group_rule" "ep_ingress_from_bastion" {
+  count     = var.create_vpc_endpoints ? 1 : 0
+  type      = "ingress"
+  from_port = 443
+  to_port   = 443
+  protocol  = "tcp"
+
+  security_group_id        = aws_security_group.endpoints[0].id
+  source_security_group_id = aws_security_group.bastion.id
+}
+
+#################################
 # ---------- BASTION SG ----------
+#################################
 resource "aws_security_group" "bastion" {
   name   = "${var.name_prefix}-bastion-sg-${var.environment}"
   vpc_id = var.vpc_id
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  dynamic "ingress" {
-    for_each = var.enable_ssh_fallback ? var.allowed_ssh_cidrs : []
-    content {
-      description = "SSH fallback"
-      from_port   = 22
-      to_port     = 22
-      protocol    = "tcp"
-      cidr_blocks = [ingress.value]
-    }
-  }
-  tags = var.tags
+  tags   = var.tags
 }
 
+# egress to the internet when endpoints are **not** used
+resource "aws_security_group_rule" "bastion_egress_internet" {
+  count             = var.create_vpc_endpoints ? 0 : 1
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.bastion.id
+}
+
+# egress to endpoint SG when endpoints are enabled
+resource "aws_security_group_rule" "bastion_egress_endpoints" {
+  count                    = var.create_vpc_endpoints ? 1 : 0
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.bastion.id
+  source_security_group_id = aws_security_group.endpoints[0].id # <— correct attr for remote SG
+}
+
+# optional SSH fallback
+resource "aws_security_group_rule" "bastion_ingress_ssh" {
+  for_each          = var.enable_ssh_fallback ? toset(var.allowed_ssh_cidrs) : toset({})
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = [each.key]
+  security_group_id = aws_security_group.bastion.id
+  description       = "SSH fallback"
+}
+
+#################################
 # ---------- IAM ----------
+#################################
 resource "aws_iam_role" "bastion" {
   name = "${var.name_prefix}-bastion-role-${var.environment}"
   assume_role_policy = jsonencode({
-    Version   = "2012-10-17"
-    Statement = [{ Effect = "Allow", Principal = { Service = "ec2.amazonaws.com" }, Action = "sts:AssumeRole" }]
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
   })
   tags = var.tags
 }
@@ -156,14 +205,23 @@ resource "aws_iam_instance_profile" "bastion" {
   role = aws_iam_role.bastion.name
 }
 
+#################################
 # ---------- EC2 ----------
+#################################
 resource "aws_instance" "bastion" {
   ami                         = var.ami_id
   instance_type               = var.instance_type
   subnet_id                   = var.public_subnet_id
-  vpc_security_group_ids      = [aws_security_group.bastion.id]
-  iam_instance_profile        = aws_iam_instance_profile.bastion.name
   associate_public_ip_address = var.enable_public_ip
-  user_data                   = file("${path.module}/scripts/user_data.sh")
-  tags                        = merge(var.tags, { Name = "${var.name_prefix}-bastion" })
+
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+  iam_instance_profile   = aws_iam_instance_profile.bastion.name
+  user_data              = file("${path.module}/scripts/user_data.sh")
+
+  metadata_options {
+    http_tokens   = "required"
+    http_endpoint = "enabled"
+  }
+
+  tags = merge(var.tags, { Name = "${var.name_prefix}-bastion" })
 }
