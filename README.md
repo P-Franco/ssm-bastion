@@ -42,7 +42,7 @@ Developer ──► SSM Session
 
 ```hcl
 module "bastion" {
-  source             = "git::https://github.com/P-Franco/ssm-bastion.git?ref=v0.1.0"
+  source             = "git::https://github.com/P-Franco/ssm-bastion.git?ref=v0.1.2"
 
   name_prefix        = "demo"
   vpc_id             = module.vpc.id
